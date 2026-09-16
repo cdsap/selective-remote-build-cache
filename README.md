@@ -142,7 +142,7 @@ Knobs are Gradle properties, defaults in `sample/gradle.properties`:
 ./gradlew -p plugin test
 ```
 
-83 tests, ~25s, no Develocity server needed.
+85 tests, ~25s, no Develocity server needed.
 
 ## More
 

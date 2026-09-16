@@ -96,7 +96,7 @@ to test. Now:
 
 ## Tests
 
-`./gradlew -p plugin test` — 83 tests, ~25s, no Develocity server needed.
+`./gradlew -p plugin test` — 85 tests, ~25s, no Develocity server needed.
 
 | Suite | Tests | Layer | What it pins down |
 |---|---|---|---|
@@ -107,7 +107,7 @@ to test. Now:
 | `DeclineScanReportTest` | 6 | scan | what is published and when, idempotent registration, explicit zeros, no-Develocity safety |
 | `FilteringBuildCacheServiceTest` | 12 | adapter | a decline really stops short of the delegate, bookkeeping, owner-lookup avoidance, close semantics |
 | `FilteringFunctionalTest` | 8 | end to end | real Gradle builds: exclusion, local tier unaffected, wildcards, size filter, `--parallel`, configuration-cache hit |
-| `DevelocityDelegationFunctionalTest` | 8 | end to end | decorating the Develocity connector, and rejecting any other cache type |
+| `DevelocityDelegationFunctionalTest` | 10 | end to end | decorating the Develocity connector, defaulting the delegate, push semantics, and rejecting any other cache type |
 | `ScanAnnotationFunctionalTest` | 6 | end to end | the reflective hop to a Develocity-shaped extension |
 
 The functional tests spawn real Gradle builds via TestKit and need no Develocity server. They
