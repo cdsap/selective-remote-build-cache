@@ -121,7 +121,12 @@ jobs:
         run: |
           cd sample
           DEX=com.android.build.gradle.internal.tasks.DexMergingTask
-          rm -rf .caches build app/build core/build domain/build
+
+          # The local tier lives in the Gradle user home and setup-gradle restores it between
+          # runs. A warm local hit would satisfy dex merging without ever consulting the remote,
+          # so there would be nothing for the filter to decline. Wipe it to force a real cold run.
+          LOCAL="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/build-cache-1"
+          rm -rf "$LOCAL" build app/build core/build domain/build
 
           # Passed explicitly, so this step checks the right type even if the default in
           # sample/gradle.properties changes.
@@ -133,9 +138,13 @@ jobs:
           grep -q "declined remote load for $DEX" /tmp/cold.log \
             || { echo "::error::no DexMergingTask load was declined"; exit 1; }
 
-          # The filter must never touch the local tier.
-          [ "$(find .caches/local -type f ! -name 'gc.properties' ! -name '*.lock' | wc -l)" -gt 0 ] \
-            || { echo "::error::local cache is empty; the filter leaked into the local tier"; exit 1; }
+          # The filter must never touch the local tier: the entry we just declined to upload has
+          # to be sitting in the local cache under the very same key.
+          KEY=$(sed -n "s/.*declined remote store for $DEX .*(key \([0-9a-f]*\),.*/\1/p" /tmp/cold.log | head -1)
+          [ -n "$KEY" ] \
+            || { echo "::error::could not read a declined store key for $DEX out of the log"; exit 1; }
+          [ -f "$LOCAL/$KEY" ] \
+            || { echo "::error::$DEX entry $KEY is missing from $LOCAL; the filter leaked into the local tier"; exit 1; }
 
           echo "dex merging declined from Develocity; local cache still populated"
 
