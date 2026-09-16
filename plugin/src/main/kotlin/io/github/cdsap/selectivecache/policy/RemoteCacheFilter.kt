@@ -32,7 +32,7 @@ class RemoteCacheFilter(
 ) {
     /**
      * Whether any rule depends on knowing which work unit is running. False means the caller can
-     * skip the build-operation lookup entirely, which is the whole cost of this plugin.
+     * skip the build-operation lookup, which is where this plugin's overhead sits.
      */
     val needsWorkOwner: Boolean get() = !excludedTypes.isEmpty
 

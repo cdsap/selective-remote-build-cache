@@ -59,10 +59,10 @@ constructor injection, so we can:
    expects is injected,
 4. call its `createBuildCacheService(...)` and wrap the result.
 
-The Develocity plugin needs no cooperation and is never modified. It is also handed the real
-`Describer`, so the Build Scan still reports the cache as Develocity's — verified, the description
-reads `Using remote Develocity build cache … (authenticated = true,
-filtered by = selective-remote-build-cache, excludedTypes = …)`. Develocity's `type` wins; our
+The Develocity plugin needs no cooperation and is never modified. It is handed the real
+`Describer`, so the Build Scan still reports the cache as Develocity's. The description reads
+`Using remote Develocity build cache … (authenticated = true,
+filtered by = selective-remote-build-cache, excludedTypes = …)`: Develocity's `type` wins, and our
 filter config is appended as extra parameters.
 
 ### Recovering the task identity
@@ -80,18 +80,18 @@ make the correlation possible:
    `store` skips the upload. Neither can reach the local cache, which Gradle holds as a separate
    handle in `DefaultBuildCacheController` and consults *first*.
 
-`WorkOwnershipTracker` propagates ownership **down** the operation subtree at start time rather
-than walking parent chains on lookup, so the map only ever holds operations beneath a task or
+`BuildOperationWorkOwnerSource` propagates ownership down the operation subtree at start time
+rather than walking parent chains on lookup, so the map only holds operations beneath a task or
 transform, and the lookup is O(1).
 
-The listener is registered from the factory's `@Inject` constructor, **not** from the settings
-plugin. This is deliberate: Gradle recreates the cache service on every build including
-configuration-cache hits, whereas settings scripts are not re-evaluated on a hit.
+The listener is registered from the factory's `@Inject` constructor rather than the settings
+plugin, because Gradle recreates the cache service on every build including configuration-cache
+hits, whereas settings scripts are not re-evaluated on a hit.
 
 ## Architecture
 
-Three layers, one rule: **dependencies point inward.** `policy` knows nothing about Gradle;
-`work` and `scan` each hide one awkward external system; the root package is Gradle integration.
+Three layers, and dependencies point inward. `policy` knows nothing about Gradle; `work` and
+`scan` each hide one awkward external system; the root package is Gradle integration.
 
 ```
 io.github.cdsap.selectivecache          Gradle integration + public API
@@ -123,8 +123,7 @@ to test. Now:
   every rule with no Gradle types at all, in milliseconds.
 - The two genuinely hard integrations — recovering the task type from build operations, and reaching
   Develocity reflectively — sit behind one-method ports. Neither leaks into the rules.
-- `FilteringBuildCacheService` is now ~30 lines of actual behaviour: resolve owner, ask the filter,
-  record, delegate.
+- `FilteringBuildCacheService` is ~30 lines: resolve owner, ask the filter, record, delegate.
 - The factory is a wiring diagram. If you want to know what talks to what, read that one file.
 
 **Reading order for a walkthrough:** `RemoteCacheFilter` (what it decides) ->
@@ -133,7 +132,7 @@ to test. Now:
 
 ## Tests
 
-`cd plugin && gradle test` — **82 tests, ~25s**.
+`./gradlew -p plugin test` — 83 tests, ~25s, no Develocity server needed.
 
 | Suite | Tests | Layer | What it pins down |
 |---|---|---|---|
@@ -221,13 +220,13 @@ which is exactly what `doNotCacheIf` cannot give you.
 `sample/` applies the actual `com.gradle.develocity` 4.5.1 plugin and delegates to its cache. The
 results below were measured against a real Develocity instance, not projected.
 
-The sample has no default server — pass your own, so that cloning this repo never publishes Build
-Scans or cache entries to someone else's instance:
+The server is set in `sample/settings.gradle.kts`. Point it at your own instance before running
+this, or you will publish Build Scans and cache entries somewhere you did not intend:
 
 ```
 cd sample
-../gradlew provisionDevelocityAccessKey                       # once, to authenticate
-../gradlew -Pdevelocity.server=https://develocity.example.com runAll --build-cache
+../gradlew provisionDevelocityAccessKey    # once, to authenticate
+../gradlew runAll --build-cache
 ```
 
 **API note.** `develocity.buildCache` is a `Class`, not an instance — the documented Develocity
@@ -242,12 +241,14 @@ remote(SelectiveRemoteBuildCache::class.java) {
 }
 ```
 
-The block is typed, so delegate-specific members are available. It runs during settings evaluation,
-**not** deferred to when the cache service is created — deferring it executed the user's block at
-execution time, and a block touching script state such as `rootDir` then failed the configuration
-cache. The test suite caught that.
+The block is typed, so delegate-specific members are available. It runs during settings
+evaluation rather than being deferred to cache-service creation: deferring it ran the user's block
+at execution time, and a block touching script state such as `rootDir` then failed the
+configuration cache. The test suite caught that.
 
-**Results**
+**Results** — measured on the earlier synthetic sample (three projects, a `small` and a `big`
+task each), before `sample/` became an Android build. The mechanism is unchanged; only the tasks
+being filtered differ.
 
 | Check | Outcome |
 |---|---|
@@ -256,7 +257,7 @@ cache. The test suite caught that.
 | Excluded type skips remote | all `big` tasks re-execute with local wiped |
 | Local tier unaffected | outputs deleted, local kept -> all `big` tasks `FROM-CACHE` |
 | Configuration cache | scan reports `gradleConfigurationCache.outcome: HIT` with filtering still applied |
-| Build Scan cache identity | `remote: {type: "Develocity", url: "https://<your-server>/cache", isPushEnabled: true}` — **DV's identity is preserved**; `className` additionally shows our wrapper, which is useful for diagnosis |
+| Build Scan cache identity | `remote: {type: "Develocity", url: "https://<your-server>/cache", isPushEnabled: true}` — Develocity's identity is preserved; `className` also shows our wrapper, which helps when diagnosing |
 
 **Measured effect** — same 6 tasks, entries present in the remote, local cache off:
 

@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * The filtering rules, tested with no Gradle types at all — which is the point of keeping them
- * pure. Everything the plugin decides is decided here.
+ * The filtering rules, tested with no Gradle types at all: the reason for keeping them pure.
+ * Everything the plugin decides is decided here.
  */
 class RemoteCacheFilterTest {
 

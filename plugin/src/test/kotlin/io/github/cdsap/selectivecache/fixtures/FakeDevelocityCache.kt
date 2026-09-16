@@ -11,9 +11,8 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Stands in for Develocity's connector: its own factory, with a build-scoped service injected,
- * and no knowledge of the selective cache plugin — which is the point, since the real connector
- * cannot be modified either.
+ * Stands in for Develocity's connector: its own factory, with a build-scoped service injected, and
+ * no knowledge of the selective cache plugin. The real connector cannot be modified either.
  */
 class FakeDevelocityBuildCacheServiceFactory @Inject constructor(
     // If the decorating factory instantiates this one incorrectly, construction fails here.
