@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build, test and prove behaviour
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The wrapper jar is an executable binary in the repo; confirm it is an
+      # untampered official distribution before we run it.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Pins the toolchain the same way the wrapper pins Gradle: if ./gradlew
+      # ever resolves to something other than 9.7.1, fail loudly rather than
+      # silently validating the wrong version.
+      - name: Confirm pinned Gradle version
+        run: |
+          ACTUAL="$(./gradlew -p plugin --version | awk '/^Gradle/ {print $2}')"
+          echo "Gradle reported: $ACTUAL"
+          [ "$ACTUAL" = "9.7.1" ] || { echo "::error::expected Gradle 9.7.1, got $ACTUAL"; exit 1; }
+
+      - name: Build and test the plugin
+        run: ./gradlew -p plugin build --stacktrace
+
+      # verify.sh is an assertion, not a demo: each scenario greps for the
+      # expected filtering output and the script runs under `set -o pipefail`,
+      # so a missing line fails the job.
+      - name: Behavioural proof (verify.sh)
+        run: ./verify.sh
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            plugin/build/reports/tests/
+            plugin/build/test-results/
+          retention-days: 7
