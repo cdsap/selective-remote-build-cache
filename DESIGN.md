@@ -141,11 +141,11 @@ real Develocity instance: the `android` job in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml), which needs the `DEVELOCITY_URL` and
 `DEVELOCITY_ACCESS_KEY` repository secrets.
 
-To run the same thing by hand:
+To run the same thing by hand. The server is whatever `sample/settings.gradle.kts` names, so
+check it before running:
 
 ```
 cd sample
-export DEVELOCITY_SERVER=https://develocity.example.com
 ../gradlew provisionDevelocityAccessKey    # once, or set DEVELOCITY_ACCESS_KEY
 ../gradlew runAll --build-cache
 ```
@@ -155,21 +155,22 @@ export DEVELOCITY_SERVER=https://develocity.example.com
 candidate for exclusion: the external-dependency merge produces a ~715 KiB entry that is usually
 cheaper to recompute than to fetch over a WAN.
 
-What it proves:
+The behaviours involved. Rows 1-5 are each covered by the offline test suite; the CI Develocity
+job re-checks rows 1 and 3 against a live server.
 
 | # | Behaviour | Result |
 |---|---|---|
 | 0 | Develocity connector delegation | Develocity's factory runs, injected `BuildOperationRunner` resolves, Develocity's service does the caching |
 | 1 | Cold parallel build, 3 Android modules, `DexMergingTask` excluded | 9 remote loads + 9 remote stores skipped, ~2 MB not uploaded; every other cacheable task unaffected |
 | 2 | Local cache emptied, remote kept | all `compileDebugJavaWithJavac` -> `FROM-CACHE`; all dex merge tasks re-execute (remote load refused) |
-| 3 | Outputs deleted, local cache kept | all dex merge tasks -> **`FROM-CACHE`** — the local tier is genuinely unaffected |
-| 4 | `--configuration-cache` on a **reused** entry, local cache off | `Configuration cache entry reused` *and* filtering still applies |
+| 3 | Outputs deleted, local cache kept | all dex merge tasks -> `FROM-CACHE`; the local tier is unaffected |
+| 4 | `--configuration-cache` on a reused entry, local cache off | `Configuration cache entry reused`, and filtering still applies |
 | 5 | Size filter alone (`maxStoreSizeBytes=100000`) | only the three ~715 KiB external-dex entries held back; the small per-module dex entries still go to the remote |
 
-Scenario 3 is the one that matters: it is the proof that disabling remote does not disable local,
-which is exactly what `doNotCacheIf` cannot give you.
+Row 3 is the important one: disabling remote does not disable local, which is what
+`doNotCacheIf` cannot give you.
 
-### Harness notes (both cost time to track down)
+### Running the sample
 
 - Knobs are Gradle properties: defaults in `sample/gradle.properties`, overridden with `-P`, e.g.
   `-PselectiveCache.maxStoreSizeBytes=100000`. Read via `providers.gradleProperty`, so they are
@@ -247,12 +248,12 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
 
 ## Known limitations — read before deploying
 
-- **A Build Scan still counts declined operations under Miss and Store — read the custom values,
-  not the Operations table.** Gradle fires the remote load/store build operation *around* our
-  service call, so declining inside it cannot stop the operation being recorded. With 6 excluded
-  tasks the Operations table reads `Hit 0 / Miss 6 / Store 6 / 3.3 KiB` even though **nothing was
-  uploaded** (proven by forcing fresh cache keys with a nonce, running with exclusions, then
-  re-running without them and with the local cache wiped: all six tasks re-executed).
+- **A Build Scan still counts declined operations under Miss and Store.** Read the custom values,
+  not the Operations table. Gradle fires the remote load/store build operation *around* our service
+  call, so declining inside it cannot stop the operation being recorded. With 6 excluded tasks the
+  Operations table reads `Hit 0 / Miss 6 / Store 6 / 3.3 KiB` even though nothing was uploaded
+  (proven by forcing fresh cache keys with a nonce, running with exclusions, then re-running
+  without them and with the local cache wiped: all six tasks re-executed).
 
   The numbers are derived, not measured. `StoreOperationDetails` carries the entry's `archiveSize`
   regardless of whether bytes moved: 446+703+703+703+447+446 = 3448 B = 3.37 KiB, exactly the
@@ -260,7 +261,8 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
   145.2 KiB/s, exactly the "145.1 KiB/s" shown. The operation result does carry `isStored: false`,
   but the Operations table counts it anyway.
 
-  The plugin therefore annotates the scan so it is legible. Verified on a real scan:
+  The plugin therefore annotates the scan so it is legible. From a real scan, taken on the
+  earlier synthetic sample:
 
   ```
   tags: selective-remote-cache
@@ -277,12 +279,12 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
   cache. The operation itself still cannot be suppressed per type — only a global `push = false`
   avoids firing it.
 
-  Two implementation notes, both of which cost a debugging round:
-  the Develocity extension is resolved on the **first cache operation**, not when the cache service
-  is built — at that earlier point `GradleInternal.getSettings()` still throws "The settings are not
-  yet available"; and the reflective method lookup matches on **parameter types**, because Gradle's
-  decorated extension objects carry Groovy `Closure` overloads that shadow the `Action` ones and
-  produce "argument type mismatch".
+  Two implementation notes, both of which cost a debugging round. The Develocity extension is
+  resolved on the first cache operation, not when the cache service is built: at that earlier point
+  `GradleInternal.getSettings()` still throws "The settings are not yet available". And the
+  reflective method lookup matches on parameter types, because Gradle's decorated extension objects
+  carry Groovy `Closure` overloads that shadow the `Action` ones and produce "argument type
+  mismatch".
 
 - **Exercised on a small build only.** `sample/` is an Android build with real dex merging,
   running against Develocity with a real remote cache and real scans, but it is small. Behaviour
@@ -290,7 +292,7 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
 - **More internal API surface than the replacement approach.** Delegation needs
   `BuildCacheConfigurationInternal`, `InstantiatorFactory`, `ServiceRegistry` and
   `BuildOperationListenerManager`. All are long-standing, but re-verify on each Gradle major.
-  Tested on Gradle 9.7 only.
+  Tested on Gradle 9.7.1 only.
 - **Local hits mask the filter.** Gradle consults local before remote, so an excluded type that
   hits locally produces no skip log. Correct behaviour, but it makes debug output look sparse.
 - **Ordering assumption.** The listener registers when the build cache controller is first created.

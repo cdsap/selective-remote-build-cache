@@ -65,11 +65,10 @@ jobs:
     timeout-minutes: 40
 
     # This plugin filters the Develocity build cache and nothing else, so the proof needs a live
-    # instance. Add two repository secrets:
-    #   DEVELOCITY_URL        e.g. https://develocity.example.com
+    # instance. The server is whatever sample/settings.gradle.kts names; only the credentials come
+    # from here. Add one repository secret:
     #   DEVELOCITY_ACCESS_KEY in the form the Develocity plugin expects: host=key
     env:
-      DEVELOCITY_SERVER: ${{ secrets.DEVELOCITY_URL }}
       DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
     steps:
@@ -77,14 +76,12 @@ jobs:
 
       - name: Check Develocity credentials are present
         run: |
-          missing=0
-          [ -n "$DEVELOCITY_SERVER" ]    || { echo "::error::secret DEVELOCITY_URL is not set"; missing=1; }
-          [ -n "$DEVELOCITY_ACCESS_KEY" ] || { echo "::error::secret DEVELOCITY_ACCESS_KEY is not set"; missing=1; }
-          [ "$missing" -eq 0 ] || {
-            echo "The Develocity proof cannot run without both secrets. See .github/workflows/ci.yml."
+          [ -n "$DEVELOCITY_ACCESS_KEY" ] || {
+            echo "::error::secret DEVELOCITY_ACCESS_KEY is not set"
+            echo "The Develocity proof cannot run without it. See .github/workflows/ci.yml."
             exit 1
           }
-          echo "Develocity server: $DEVELOCITY_SERVER"
+          echo "Server in use: $(grep -o 'server = \"[^\"]*\"' sample/settings.gradle.kts)"
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
