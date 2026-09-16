@@ -37,14 +37,6 @@ fun knob(name: String, default: String): String =
     providers.gradleProperty(name).getOrElse(default)
 
 buildCache {
-    local {
-        directory = File(rootDir, ".caches/local")
-        isEnabled = false
-        isPush = true
-    }
-
-    // No delegateTo: the plugin defaults to develocity.buildCache. Its connector does all the
-    // network work. isPush here is the one Gradle reads; the delegate's own would be ignored.
     remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache::class.java) {
         isPush = true
         excludedTypes = knob("selectiveCache.excludedTypes", "")
