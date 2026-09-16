@@ -194,7 +194,11 @@ cd sample
 ```
 
 **API note.** `develocity.buildCache` is a `Class`, not an instance — the documented Develocity
-usage is `remote(develocity.buildCache) { }`. `delegateTo` takes that class directly and builds the
+usage is `remote(develocity.buildCache) { }`. The settings plugin reads that same `getBuildCache()`
+off the Develocity extension in a `settingsEvaluated` hook, which is why `delegateTo` can be
+omitted entirely. Resolving it there rather than at cache-service creation keeps the delegate part
+of the serialised configuration, so configuration-cache hits need nothing extra. `delegateTo` takes
+that class directly and builds the
 configuration object itself with Gradle's `ObjectFactory`, so there is one block, not two:
 
 ```kotlin

@@ -122,7 +122,63 @@ class DevelocityDelegationFunctionalTest : AbstractFunctionalTest() {
     }
 
     @Test
-    fun `a missing delegateTo is rejected with a clear message`() {
+    fun `the delegate defaults to the Develocity cache when delegateTo is omitted`() {
+        settings(
+            preamble = "extensions.create('develocity', io.github.cdsap.selectivecache.fixtures.FakeDevelocityExtension)",
+            remoteBody = """
+                registerBuildCacheService(
+                    com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache,
+                    io.github.cdsap.selectivecache.fixtures.FakeDevelocityBuildCacheServiceFactory)
+
+                remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache) {
+                    push = true
+                    excludedTypes = ['BigOutputTask'] as Set
+                    debug = true
+                }
+            """.trimIndent(),
+        )
+        buildScriptWithTasks()
+
+        val result = run("runAll")
+
+        assertTrue(result.output.contains("FAKE-DEVELOCITY: factory ran with"),
+            "with no delegateTo the Develocity cache should still be used:\n${result.output}")
+        assertTrue(result.output.contains("FAKE-DEVELOCITY: stored"),
+            "non-excluded work must reach Develocity through the defaulted delegate")
+        assertTrue(result.output.contains("declined remote store for BigOutputTask"),
+            "filtering must still apply to the defaulted delegate")
+    }
+
+    @Test
+    fun `push is controlled by the outer cache, not by the delegate`() {
+        // Gradle reads enabled/push from the cache registered as the remote - ours. The delegate
+        // object never reaches that logic, so setting push on it does nothing. Without this test
+        // the redundant `push` in the delegate block reads as if it were load-bearing.
+        settings(remoteBody = """
+            registerBuildCacheService(
+                com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache,
+                io.github.cdsap.selectivecache.fixtures.FakeDevelocityBuildCacheServiceFactory)
+
+            remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache) {
+                push = true
+                delegateTo(com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache) {
+                    directory = new File(rootDir, '.caches/develocity')
+                    server = 'https://develocity.example.com'
+                    push = false
+                }
+                debug = true
+            }
+        """.trimIndent())
+        buildScriptWithTasks()
+
+        run("runAll")
+
+        assertTrue(develocityEntries().isNotEmpty(),
+            "push=false on the delegate must not stop stores; the outer push=true decides")
+    }
+
+    @Test
+    fun `omitting delegateTo without the Develocity plugin is rejected with a clear message`() {
         settings(remoteBody = """
             remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache) {
                 push = true
@@ -131,8 +187,8 @@ class DevelocityDelegationFunctionalTest : AbstractFunctionalTest() {
         buildScriptWithTasks()
 
         val result = runAndFail("runAll")
-        assertTrue(result.output.contains("needs a 'delegateTo' cache to filter in front of"),
-            "expected a clear configuration message but got:\n" + result.output)
+        assertTrue(result.output.contains("no 'develocity' extension was found"),
+            "expected a message naming the missing Develocity plugin but got:\n" + result.output)
     }
 
     @Test

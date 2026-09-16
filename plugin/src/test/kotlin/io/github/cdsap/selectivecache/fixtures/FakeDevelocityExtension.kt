@@ -9,6 +9,13 @@ import org.gradle.api.Action
  */
 open class FakeDevelocityExtension {
     val buildScan: FakeBuildScan = FakeBuildScan()
+
+    /**
+     * Mirrors DevelocityConfiguration.getBuildCache(), which returns the cache *type*, not an
+     * instance. This is what the settings plugin reads when no delegateTo was written.
+     */
+    open fun getBuildCache(): Class<*> =
+        com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache::class.java
 }
 
 open class FakeBuildScan {

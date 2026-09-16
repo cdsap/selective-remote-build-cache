@@ -43,12 +43,10 @@ buildCache {
         isPush = true
     }
 
-    // The Develocity cache, configured in place. Its connector does all the network work.
+    // No delegateTo: the plugin defaults to develocity.buildCache. Its connector does all the
+    // network work. isPush here is the one Gradle reads; the delegate's own would be ignored.
     remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache::class.java) {
         isPush = true
-        delegateTo(develocity.buildCache) {
-            isPush = true
-        }
         excludedTypes = knob("selectiveCache.excludedTypes", "")
             .split(",").filter { it.isNotBlank() }.toSet()
         maxStoreSizeBytes = knob("selectiveCache.maxStoreSizeBytes", "0").toLong()

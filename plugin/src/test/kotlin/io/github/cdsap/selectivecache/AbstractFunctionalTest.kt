@@ -78,10 +78,11 @@ abstract class AbstractFunctionalTest {
 
             $preamble
 
+            // Applied the way a real build applies it, so the tests exercise the plugin's own
+            // wiring: it registers the cache type and defaults the delegate.
+            apply plugin: io.github.cdsap.selectivecache.SelectiveRemoteCacheSettingsPlugin
+
             buildCache {
-                registerBuildCacheService(
-                    io.github.cdsap.selectivecache.SelectiveRemoteBuildCache,
-                    io.github.cdsap.selectivecache.SelectiveRemoteBuildCacheServiceFactory)
                 local {
                     directory = new File(rootDir, '.caches/local')
                     enabled = $localEnabled

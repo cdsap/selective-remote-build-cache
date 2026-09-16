@@ -14,7 +14,8 @@ the protocol, the retries and the Build Scan reporting.
 
 - Gradle 9.7+ (tested on 9.7.1)
 - The `com.gradle.develocity` plugin. This plugin filters the Develocity cache and nothing else;
-  passing any other cache type to `delegateTo` fails during settings evaluation.
+  it defaults to `develocity.buildCache`, and passing any other cache type to `delegateTo` fails
+  during settings evaluation.
 
 ## Usage
 
@@ -40,12 +41,22 @@ buildCache {
 
     remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache::class.java) {
         isPush = true
-        delegateTo(develocity.buildCache)
-
         excludedTypes = setOf("com.android.build.gradle.internal.tasks.DexMergingTask")
     }
 }
 ```
+
+There is no `delegateTo` line: the cache being filtered defaults to `develocity.buildCache`. Write
+one only to configure the Develocity cache at the same time:
+
+```kotlin
+delegateTo(develocity.buildCache) {
+    useExpectContinue = false
+}
+```
+
+Set `isPush` and `isEnabled` on the outer block, not inside `delegateTo`. Gradle reads them from
+the cache registered as the remote, which is this one; the delegate's own copies are ignored.
 
 Excluded types still use the local cache as normal. Only the remote tier is skipped, so a second
 build on the same machine still gets them `FROM-CACHE`.
@@ -86,7 +97,7 @@ excludeLoads = false
 
 | Option | Default | Effect |
 |---|---|---|
-| `delegateTo(develocity.buildCache)` | required | The Develocity cache to filter in front of |
+| `delegateTo(develocity.buildCache)` | `develocity.buildCache` | The Develocity cache to filter in front of. Only needed to configure it |
 | `excludedTypes` | empty | Task and `TransformAction` class names that skip the remote cache. `*` wildcards allowed |
 | `maxStoreSizeBytes` | `0` | Skip remote *stores* above this size. `0` means no limit |
 | `excludeLoads` | `true` | Whether excluded types also skip remote downloads |

@@ -17,14 +17,18 @@ import javax.inject.Inject
 class FakeDevelocityBuildCacheServiceFactory @Inject constructor(
     // If the decorating factory instantiates this one incorrectly, construction fails here.
     private val buildOperationRunner: BuildOperationRunner,
+    private val gradle: org.gradle.api.invocation.Gradle,
 ) : BuildCacheServiceFactory<DevelocityBuildCache> {
 
     override fun createBuildCacheService(
         configuration: DevelocityBuildCache,
         describer: BuildCacheServiceFactory.Describer,
     ): BuildCacheService {
-        val dir = requireNotNull(configuration.directory) { "fake Develocity cache needs a directory" }
-        require(!configuration.server.isNullOrEmpty()) { "fake Develocity cache needs a server" }
+        // The real connector reads server and credentials from the develocity extension rather
+        // than from the cache object, which is why an unconfigured instance still works. The
+        // fake mirrors that by falling back to a location under the build directory.
+        val dir = configuration.directory
+            ?: File(gradle.startParameter.currentDir, ".caches/develocity")
         describer.type("Develocity").config("location", dir.absolutePath)
         println("FAKE-DEVELOCITY: factory ran with ${buildOperationRunner.javaClass.simpleName}")
         return FakeDevelocityBuildCacheService(dir)
