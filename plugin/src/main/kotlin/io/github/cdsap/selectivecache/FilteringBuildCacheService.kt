@@ -3,7 +3,6 @@ package io.github.cdsap.selectivecache
 import io.github.cdsap.selectivecache.policy.DeclineTally
 import io.github.cdsap.selectivecache.policy.FilterDecision
 import io.github.cdsap.selectivecache.policy.RemoteCacheFilter
-import io.github.cdsap.selectivecache.scan.DeclineScanReport
 import io.github.cdsap.selectivecache.work.WorkOwnerSource
 import org.gradle.api.logging.Logging
 import org.gradle.caching.BuildCacheEntryReader
@@ -24,7 +23,6 @@ internal class FilteringBuildCacheService(
     private val filter: RemoteCacheFilter,
     private val workOwner: WorkOwnerSource,
     private val tally: DeclineTally,
-    private val scanReport: DeclineScanReport,
     private val debug: Boolean,
     private val onClose: () -> Unit,
 ) : BuildCacheService {
@@ -32,7 +30,6 @@ internal class FilteringBuildCacheService(
     private val logger = Logging.getLogger(FilteringBuildCacheService::class.java)
 
     override fun load(key: BuildCacheKey, reader: BuildCacheEntryReader): Boolean {
-        scanReport.registerOnce()
         val decision = filter.forLoad(currentWorkOwner())
         if (decision is FilterDecision.Decline) {
             tally.recordLoad(decision.attributedTo)
@@ -43,7 +40,6 @@ internal class FilteringBuildCacheService(
     }
 
     override fun store(key: BuildCacheKey, writer: BuildCacheEntryWriter) {
-        scanReport.registerOnce()
         val decision = filter.forStore(currentWorkOwner(), writer.size)
         if (decision is FilterDecision.Decline) {
             tally.recordStore(decision.attributedTo, writer.size)
