@@ -174,24 +174,30 @@ object instead. Hence `delegateTo`.
 
 ## Behavioural demo
 
-The test suite above is the authority; `./verify.sh` is a readable walkthrough against Gradle 9.7.1
-/ JDK 21. Unlike the tests it needs a **real Develocity instance**, because this plugin filters the
-Develocity cache and nothing else:
+The test suite above is the authority and runs offline on every push. CI additionally proves the
+behaviour end to end against a **real Develocity instance**, because this plugin filters the
+Develocity cache and nothing else — see the `android` job in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml), which needs the `DEVELOCITY_URL` and
+`DEVELOCITY_ACCESS_KEY` repository secrets.
+
+To drive the same thing by hand:
 
 ```
+cd sample
 export DEVELOCITY_SERVER=https://develocity.example.com
-./gradlew provisionDevelocityAccessKey     # once, or set DEVELOCITY_ACCESS_KEY
-./verify.sh
+../gradlew provisionDevelocityAccessKey    # once, or set DEVELOCITY_ACCESS_KEY
+printf 'excludedTypes=com.android.build.gradle.internal.tasks.DexMergingTask\n' > filter.properties
+../gradlew runAll --build-cache
 ```
-
-All five scenarios pass:
 
 `sample/` is a real Android build — AGP 9.4.0, three application modules — with
 `com.android.build.gradle.internal.tasks.DexMergingTask` on the deny-list. Dex merging is the
 canonical negative-savings candidate: the external-dependency merge alone produces a ~715 KiB
 entry that is usually faster to recompute than to pull over a WAN.
 
-| # | Scenario | Result |
+The behaviours proved, and where each is covered:
+
+| # | Behaviour | Result |
 |---|---|---|
 | 0 | Develocity connector delegation | Develocity's factory runs, injected `BuildOperationRunner` resolves, Develocity's service does the caching |
 | 1 | Cold parallel build, 3 Android modules, `DexMergingTask` excluded | 9 remote loads + 9 remote stores skipped, ~2 MB not uploaded; every other cacheable task unaffected |
@@ -205,8 +211,8 @@ which is exactly what `doNotCacheIf` cannot give you.
 
 ### Harness notes (both cost time to track down)
 
-- Scenario knobs live in `sample/filter.properties`, not `-D` system properties. Values passed with
-  `-D` attach to the **daemon JVM for its whole lifetime**, so they leak across scenarios and make
+- Knobs live in `sample/filter.properties`, not `-D` system properties. Values passed with `-D`
+  attach to the **daemon JVM for its whole lifetime**, so they leak between runs and make
   configuration-cache inputs flap.
 - `sample/` needs an Android SDK. `ANDROID_HOME` is used if set, otherwise AGP falls back to the
   platform default location. `local.properties` is git-ignored, so pointing at a local SDK never

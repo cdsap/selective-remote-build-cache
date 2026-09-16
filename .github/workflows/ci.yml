@@ -103,26 +103,38 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # verify.sh is an assertion, not a demo: each scenario greps for the expected filtering
-      # output and the script runs under `set -o pipefail`, so a missing line fails the job.
-      - name: Behavioural proof (verify.sh)
-        run: ./verify.sh
-
-      # Independent of verify.sh's own greps: prove the excluded type really is DexMergingTask
-      # and that the Develocity remote never received its entries.
-      - name: Assert dex merging was declined
+      # The plugin's own 83 tests are the authority and run offline in the job above. This job
+      # exists for the realism the test doubles cannot reach: Develocity's actual connector over
+      # the network, and real AGP dex merging at real scale.
+      - name: Prove dex merging is declined against real Develocity
         run: |
           cd sample
-          printf 'excludedTypes=com.android.build.gradle.internal.tasks.DexMergingTask\n' > filter.properties
+          DEX=com.android.build.gradle.internal.tasks.DexMergingTask
+          printf 'excludedTypes=%s\n' "$DEX" > filter.properties
           rm -rf .caches build app/build core/build domain/build
-          ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/build.log
 
-          grep -q 'declined remote store for com.android.build.gradle.internal.tasks.DexMergingTask' /tmp/build.log \
+          ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/cold.log
+
+          grep -q "declined remote store for $DEX" /tmp/cold.log \
             || { echo "::error::no DexMergingTask store was declined"; exit 1; }
-          grep -q 'declined remote load for com.android.build.gradle.internal.tasks.DexMergingTask' /tmp/build.log \
+          grep -q "declined remote load for $DEX" /tmp/cold.log \
             || { echo "::error::no DexMergingTask load was declined"; exit 1; }
 
-          # The local tier must be untouched by the filter.
-          test -d .caches/local && [ "$(find .caches/local -type f ! -name 'gc.properties' ! -name '*.lock' | wc -l)" -gt 0 ] \
+          # The filter must never touch the local tier.
+          [ "$(find .caches/local -type f ! -name 'gc.properties' ! -name '*.lock' | wc -l)" -gt 0 ] \
             || { echo "::error::local cache is empty; the filter leaked into the local tier"; exit 1; }
-          echo "dex merging declined from the Develocity cache; local cache still populated"
+
+          echo "dex merging declined from Develocity; local cache still populated"
+
+      # Excluding a type from the REMOTE tier must leave the LOCAL tier intact - the property
+      # doNotCacheIf cannot express, and the reason this plugin exists.
+      - name: Prove the local tier still serves the excluded type
+        run: |
+          cd sample
+          rm -rf build app/build core/build domain/build
+          ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/warm.log
+
+          grep -qE '^> Task .*DexDebug FROM-CACHE' /tmp/warm.log \
+            || { echo "::error::dex merging was not restored from the local cache"; exit 1; }
+
+          echo "dex merging restored from the local tier despite being excluded from the remote"
