@@ -3,8 +3,6 @@ package io.github.cdsap.selectivecache
 import io.github.cdsap.selectivecache.policy.DeclineTally
 import io.github.cdsap.selectivecache.policy.RemoteCacheFilter
 import io.github.cdsap.selectivecache.policy.TypePatterns
-import io.github.cdsap.selectivecache.scan.DeclineScanReport
-import io.github.cdsap.selectivecache.scan.DevelocityScanReporter
 import io.github.cdsap.selectivecache.work.BuildOperationWorkOwnerSource
 import io.github.cdsap.selectivecache.work.WorkOwnerSource
 import javax.inject.Inject
@@ -49,11 +47,6 @@ class SelectiveRemoteBuildCacheServiceFactory @Inject constructor(
             filter = filter,
             workOwner = workOwner.source,
             tally = tally,
-            scanReport = DeclineScanReport(
-                findReporter = { DevelocityScanReporter.findOrNull(gradle) },
-                configuration = scanConfigurationOf(configuration),
-                tally = tally,
-            ),
             debug = configuration.debug,
             onClose = workOwner.detach,
         )
@@ -108,12 +101,6 @@ class SelectiveRemoteBuildCacheServiceFactory @Inject constructor(
             .config("excludedTypes", configuration.excludedTypesDisplay)
             .config("maxStoreSize", configuration.maxStoreSizeDisplay)
     }
-
-    private fun scanConfigurationOf(configuration: SelectiveRemoteBuildCache) = listOf(
-        "${DeclineScanReport.PREFIX}.excluded-types" to configuration.excludedTypesDisplay,
-        "${DeclineScanReport.PREFIX}.max-store-size-bytes" to
-            if (configuration.maxStoreSizeBytes > 0) configuration.maxStoreSizeBytes.toString() else "unlimited",
-    )
 
     private val SelectiveRemoteBuildCache.excludedTypesDisplay: String
         get() = excludedTypes.sorted().joinToString(", ").ifEmpty { "(none)" }

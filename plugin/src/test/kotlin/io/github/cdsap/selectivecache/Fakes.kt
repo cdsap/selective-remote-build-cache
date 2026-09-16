@@ -3,7 +3,6 @@ package io.github.cdsap.selectivecache
 import io.github.cdsap.selectivecache.policy.DeclineTally
 import io.github.cdsap.selectivecache.policy.RemoteCacheFilter
 import io.github.cdsap.selectivecache.policy.TypePatterns
-import io.github.cdsap.selectivecache.scan.DeclineScanReport
 import io.github.cdsap.selectivecache.work.WorkOwnerSource
 import org.gradle.caching.BuildCacheEntryReader
 import org.gradle.caching.BuildCacheEntryWriter
@@ -80,7 +79,6 @@ internal fun filteringService(
     ),
     workOwner = WorkOwnerSource { onOwnerLookup(); owner },
     tally = tally,
-    scanReport = DeclineScanReport(findReporter = { null }, configuration = emptyList(), tally = tally),
     debug = false,
     onClose = onClose,
 )
