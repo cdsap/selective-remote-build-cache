@@ -60,12 +60,31 @@ jobs:
           retention-days: 7
 
   android:
-    name: Behavioural proof on a real Android build
+    name: Behavioural proof against real Develocity
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
+    # This plugin filters the Develocity build cache and nothing else, so the proof needs a live
+    # instance. Add two repository secrets:
+    #   DEVELOCITY_URL        e.g. https://develocity.example.com
+    #   DEVELOCITY_ACCESS_KEY in the form the Develocity plugin expects: host=key
+    env:
+      DEVELOCITY_SERVER: ${{ secrets.DEVELOCITY_URL }}
+      DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check Develocity credentials are present
+        run: |
+          missing=0
+          [ -n "$DEVELOCITY_SERVER" ]    || { echo "::error::secret DEVELOCITY_URL is not set"; missing=1; }
+          [ -n "$DEVELOCITY_ACCESS_KEY" ] || { echo "::error::secret DEVELOCITY_ACCESS_KEY is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || {
+            echo "The Develocity proof cannot run without both secrets. See .github/workflows/ci.yml."
+            exit 1
+          }
+          echo "Develocity server: $DEVELOCITY_SERVER"
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
@@ -84,14 +103,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # verify.sh is an assertion, not a demo: each scenario greps for the
-      # expected filtering output and the script runs under `set -o pipefail`,
-      # so a missing line fails the job.
+      # verify.sh is an assertion, not a demo: each scenario greps for the expected filtering
+      # output and the script runs under `set -o pipefail`, so a missing line fails the job.
       - name: Behavioural proof (verify.sh)
         run: ./verify.sh
 
-      # Independent of verify.sh's own greps: prove the excluded type really is
-      # DexMergingTask and that the remote cache never received its entries.
+      # Independent of verify.sh's own greps: prove the excluded type really is DexMergingTask
+      # and that the Develocity remote never received its entries.
       - name: Assert dex merging was declined
         run: |
           cd sample
@@ -107,4 +125,4 @@ jobs:
           # The local tier must be untouched by the filter.
           test -d .caches/local && [ "$(find .caches/local -type f ! -name 'gc.properties' ! -name '*.lock' | wc -l)" -gt 0 ] \
             || { echo "::error::local cache is empty; the filter leaked into the local tier"; exit 1; }
-          echo "dex merging declined from the remote cache; local cache still populated"
+          echo "dex merging declined from the Develocity cache; local cache still populated"

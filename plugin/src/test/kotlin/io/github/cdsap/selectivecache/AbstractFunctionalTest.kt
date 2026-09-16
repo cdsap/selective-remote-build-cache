@@ -33,7 +33,7 @@ abstract class AbstractFunctionalTest {
 
     /**
      * Classpath of the plugin under test, plus this test source set so functional tests can put
-     * their own fixtures (e.g. a fake vendor connector) on the settings script classpath.
+     * their own fixtures (e.g. the fake Develocity connector) on the settings script classpath.
      */
     private fun pluginClasspath(): List<File> {
         val metadata = javaClass.classLoader.getResource("plugin-under-test-metadata.properties")
@@ -92,12 +92,17 @@ abstract class AbstractFunctionalTest {
         """.trimIndent().replace("__EXCLUDES__", excludes))
     }
 
-    /** Decorates Gradle's own DirectoryBuildCache, so the tests need no cache backend of their own. */
+    /** Decorates the fake Develocity cache, so the tests need no Develocity server of their own. */
     private fun defaultRemoteBody(excludedTypes: List<String>, maxStoreSizeBytes: Long) = """
+        registerBuildCacheService(
+            com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache,
+            io.github.cdsap.selectivecache.fixtures.FakeDevelocityBuildCacheServiceFactory)
+
         remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache) {
             push = true
-            delegateTo(org.gradle.caching.local.DirectoryBuildCache) {
+            delegateTo(com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache) {
                 directory = new File(rootDir, '.caches/remote')
+                server = 'https://develocity.example.com'
             }
             excludedTypes = [__EXCLUDES__] as Set
             maxStoreSizeBytes = $maxStoreSizeBytes

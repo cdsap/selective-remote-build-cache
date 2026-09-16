@@ -36,14 +36,13 @@ buildCache {
 }
 ```
 
-`delegateTo` accepts **any** build cache type registered with Gradle — Develocity's
-`develocity.buildCache`, the built-in `HttpBuildCache` or `DirectoryBuildCache`, or a third-party
-connector. The plugin never talks to a cache backend itself; it only decides whether to call the
-one you already have.
+`delegateTo` accepts **only** Develocity's `develocity.buildCache`. Anything else is rejected
+while the settings script is still evaluating, naming the offending type. The plugin never talks to
+a cache backend itself; it only decides whether to call the Develocity connector you already have.
 
 ## How it works
 
-### Decorating the vendor's cache rather than replacing it
+### Decorating Develocity's cache rather than replacing it
 
 An earlier version of this plugin registered its own remote cache type, which meant a Develocity
 customer had to give up the Develocity connector to use it. That was unacceptable, and it is not
@@ -54,16 +53,17 @@ necessary.
 with `instantiatorFactory.inject(services)`. Both of those are reachable from our own factory by
 constructor injection, so we can:
 
-1. take the vendor's configuration object (`develocity.buildCache`) straight from their extension,
-2. look up **their** registered factory,
-3. instantiate it with exactly the `InstanceGenerator` Gradle would have used, so every service
-   they expect is injected,
-4. call their `createBuildCacheService(...)` and wrap the result.
+1. take Develocity's configuration object (`develocity.buildCache`) straight from its extension,
+2. look up **Develocity's** registered factory,
+3. instantiate it with exactly the `InstanceGenerator` Gradle would have used, so every service it
+   expects is injected,
+4. call its `createBuildCacheService(...)` and wrap the result.
 
-The vendor plugin needs no cooperation and is never modified. It is also handed the real
-`Describer`, so the Build Scan still reports the cache as theirs — verified, the description reads
-`Using remote vendor build cache … (authenticated = true, filtered by = selective-remote-build-cache,
-excludedTypes = …)`. Their `type` wins; our filter config is appended as extra parameters.
+The Develocity plugin needs no cooperation and is never modified. It is also handed the real
+`Describer`, so the Build Scan still reports the cache as Develocity's — verified, the description
+reads `Using remote Develocity build cache … (authenticated = true,
+filtered by = selective-remote-build-cache, excludedTypes = …)`. Develocity's `type` wins; our
+filter config is appended as extra parameters.
 
 ### Recovering the task identity
 
@@ -144,14 +144,15 @@ to test. Now:
 | `DeclineScanReportTest` | 6 | scan | what is published and when, idempotent registration, explicit zeros, no-Develocity safety |
 | `FilteringBuildCacheServiceTest` | 12 | adapter | a decline really stops short of the delegate, bookkeeping, owner-lookup avoidance, close semantics |
 | `FilteringFunctionalTest` | 8 | end to end | real Gradle builds: exclusion, local tier unaffected, wildcards, size filter, `--parallel`, configuration-cache hit |
-| `VendorDelegationFunctionalTest` | 7 | end to end | decorating a connector we do not control |
+| `DevelocityDelegationFunctionalTest` | 8 | end to end | decorating the Develocity connector, and rejecting any other cache type |
 | `ScanAnnotationFunctionalTest` | 6 | end to end | the reflective hop to a Develocity-shaped extension |
 
-The functional tests spawn real Gradle builds via TestKit. Most decorate Gradle's own
-`DirectoryBuildCache`, so they need no cache backend. `VendorDelegationFunctionalTest` decorates a
-fake connector defined in `src/test/kotlin/.../fixtures/` — its own `BuildCache` type and factory
-with an injected build-scoped service, and no knowledge of this plugin — which is the stand-in for
-Develocity.
+The functional tests spawn real Gradle builds via TestKit and run **fully offline** — no
+Develocity server required. They decorate a directory-backed test double that deliberately carries
+Develocity's own fully-qualified type name, `com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache`,
+with its own factory and an injected build-scoped service. Using the real name means the tests
+exercise the same Develocity-only validation path as production, with no test-only branch in the
+plugin.
 
 Debug aid: `-DselectiveCache.dumpScripts=<dir>` writes the generated functional-test scripts
 somewhere inspectable, since TestKit project directories are temporary.
@@ -163,19 +164,27 @@ samples passed. In a Groovy `settings.gradle` it silently does not:
 
 ```
 DBG closure delegate BEFORE = SelectiveRemoteBuildCache_Decorated
-delegate = vendorCache
-DBG closure delegate AFTER  = FakeVendorBuildCache_Decorated
+delegate = develocityCache
+DBG closure delegate AFTER  = DevelocityBuildCache_Decorated
 ```
 
 `delegate` inside a Groovy closure is the closure's own delegate. The assignment never reached a
-property — and worse, every later assignment in that block would have landed on the vendor object
-instead. Hence `delegateTo`.
+property — and worse, every later assignment in that block would have landed on the Develocity
+object instead. Hence `delegateTo`.
 
 ## Behavioural demo
 
-The test suite above is the authority; `./verify.sh` is a readable walkthrough against Gradle 9.7 / JDK 21. `vendor-plugin/` is a stand-in for a
-third-party connector: its own settings plugin, its own `BuildCache` type, its own factory with an
-injected build-scoped service, and no knowledge whatsoever of this plugin. All five scenarios pass:
+The test suite above is the authority; `./verify.sh` is a readable walkthrough against Gradle 9.7.1
+/ JDK 21. Unlike the tests it needs a **real Develocity instance**, because this plugin filters the
+Develocity cache and nothing else:
+
+```
+export DEVELOCITY_SERVER=https://develocity.example.com
+./gradlew provisionDevelocityAccessKey     # once, or set DEVELOCITY_ACCESS_KEY
+./verify.sh
+```
+
+All five scenarios pass:
 
 `sample/` is a real Android build — AGP 9.4.0, three application modules — with
 `com.android.build.gradle.internal.tasks.DexMergingTask` on the deny-list. Dex merging is the
@@ -184,10 +193,10 @@ entry that is usually faster to recompute than to pull over a WAN.
 
 | # | Scenario | Result |
 |---|---|---|
-| 0 | Vendor connector delegation | vendor factory runs, injected `BuildOperationRunner` resolves, vendor service does the caching |
+| 0 | Develocity connector delegation | Develocity's factory runs, injected `BuildOperationRunner` resolves, Develocity's service does the caching |
 | 1 | Cold parallel build, 3 Android modules, `DexMergingTask` excluded | 9 remote loads + 9 remote stores skipped, ~2 MB not uploaded; every other cacheable task unaffected |
 | 2 | Local cache emptied, remote kept | all `compileDebugJavaWithJavac` -> `FROM-CACHE`; all dex merge tasks re-execute (remote load refused) |
-| 3 | Remote cache emptied, local kept | all dex merge tasks -> **`FROM-CACHE`** — the local tier is genuinely unaffected |
+| 3 | Outputs deleted, local cache kept | all dex merge tasks -> **`FROM-CACHE`** — the local tier is genuinely unaffected |
 | 4 | `--configuration-cache` on a **reused** entry, local cache off | `Configuration cache entry reused` *and* filtering still applies |
 | 5 | Size filter alone (`maxStoreSizeBytes=100000`) | only the three ~715 KiB external-dex entries held back; the small per-module dex entries still go to the remote |
 
@@ -205,14 +214,14 @@ which is exactly what `doNotCacheIf` cannot give you.
 
 ## Verified against real Develocity
 
-`sample-develocity/` applies the actual `com.gradle.develocity` 4.5.1 plugin and delegates to its
-cache. The results below were measured against a real Develocity instance, not projected.
+`sample/` applies the actual `com.gradle.develocity` 4.5.1 plugin and delegates to its cache. The
+results below were measured against a real Develocity instance, not projected.
 
 The sample has no default server — pass your own, so that cloning this repo never publishes Build
-Scans to someone else's instance:
+Scans or cache entries to someone else's instance:
 
 ```
-cd sample-develocity
+cd sample
 ../gradlew provisionDevelocityAccessKey                       # once, to authenticate
 ../gradlew -Pdevelocity.server=https://develocity.example.com runAll --build-cache
 ```
@@ -238,7 +247,7 @@ cache. The test suite caught that.
 
 | Check | Outcome |
 |---|---|
-| Develocity's own factory instantiated by us | works — full service injection, no vendor changes |
+| Develocity's own factory instantiated by us | works — full service injection, no changes to the Develocity plugin |
 | Real remote pull through the wrapper | local cache wiped -> all `small` tasks `FROM-CACHE` from the DV cache |
 | Excluded type skips remote | all `big` tasks re-execute with local wiped |
 | Local tier unaffected | outputs deleted, local kept -> all `big` tasks `FROM-CACHE` |
@@ -302,9 +311,9 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
   decorated extension objects carry Groovy `Closure` overloads that shadow the `Action` ones and
   produce "argument type mismatch".
 
-- **Exercised on small builds only.** `sample/` is a real Android build with real dex merging, and
-  `sample-develocity/` runs against real Develocity with a real remote cache and real scans — but
-  both are small. Behaviour under load and with many excluded types is unmeasured.
+- **Exercised on a small build only.** `sample/` is a real Android build with real dex merging,
+  running against real Develocity with a real remote cache and real scans — but it is small.
+  Behaviour under load and with many excluded types is unmeasured.
 - **More internal API surface than the replacement approach.** Delegation needs
   `BuildCacheConfigurationInternal`, `InstantiatorFactory`, `ServiceRegistry` and
   `BuildOperationListenerManager`. All are long-standing, but re-verify on each Gradle major.
