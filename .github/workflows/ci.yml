@@ -74,14 +74,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check Develocity credentials are present
+      # The Develocity plugin wants DEVELOCITY_ACCESS_KEY as `host=key`. Accept a bare key too
+      # and pair it with the host the sample is configured for, since pasting the raw key from
+      # ~/.gradle/develocity/keys.properties is the easy mistake and fails as a 401 much later.
+      - name: Check and normalise the Develocity access key
         run: |
           [ -n "$DEVELOCITY_ACCESS_KEY" ] || {
             echo "::error::secret DEVELOCITY_ACCESS_KEY is not set"
-            echo "The Develocity proof cannot run without it. See .github/workflows/ci.yml."
+            echo "Add it with: gh secret set DEVELOCITY_ACCESS_KEY -R ${{ github.repository }}"
             exit 1
           }
-          echo "Server in use: $(grep -o 'server = \"[^\"]*\"' sample/settings.gradle.kts)"
+
+          SERVER=$(grep -o 'server = "[^"]*"' sample/settings.gradle.kts | sed -E 's/.*"(.*)"/\1/')
+          HOST=$(printf '%s' "$SERVER" | sed -E 's#^https?://##; s#/.*##')
+          echo "Sample is configured for $SERVER (host $HOST)"
+
+          case "$DEVELOCITY_ACCESS_KEY" in
+            *=*) echo "Access key already carries a host prefix" ;;
+            *)
+              echo "::add-mask::$HOST=$DEVELOCITY_ACCESS_KEY"
+              echo "DEVELOCITY_ACCESS_KEY=$HOST=$DEVELOCITY_ACCESS_KEY" >> "$GITHUB_ENV"
+              echo "Bare access key given; prefixed it with $HOST"
+              ;;
+          esac
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
