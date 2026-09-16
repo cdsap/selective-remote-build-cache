@@ -103,17 +103,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # The plugin's own 83 tests are the authority and run offline in the job above. This job
-      # exists for the realism the test doubles cannot reach: Develocity's actual connector over
-      # the network, and real AGP dex merging at real scale.
+      # The offline tests run in the job above. This job covers what the test doubles cannot:
+      # Develocity's own connector over the network, and AGP dex merging at full size.
       - name: Prove dex merging is declined against real Develocity
         run: |
           cd sample
           DEX=com.android.build.gradle.internal.tasks.DexMergingTask
           rm -rf .caches build app/build core/build domain/build
 
-          # Passed explicitly rather than relying on sample/gradle.properties, so this step
-          # fails if the default there ever drifts away from what it claims to prove.
+          # Passed explicitly, so this step checks the right type even if the default in
+          # sample/gradle.properties changes.
           ../gradlew runAll --build-cache --console=plain \
             -PselectiveCache.excludedTypes="$DEX" 2>&1 | tee /tmp/cold.log
 
@@ -128,8 +127,8 @@ jobs:
 
           echo "dex merging declined from Develocity; local cache still populated"
 
-      # Excluding a type from the REMOTE tier must leave the LOCAL tier intact - the property
-      # doNotCacheIf cannot express, and the reason this plugin exists.
+      # Excluding a type from the REMOTE tier must leave the LOCAL tier intact. That is the
+      # property doNotCacheIf cannot express.
       - name: Prove the local tier still serves the excluded type
         run: |
           cd sample

@@ -36,9 +36,9 @@ buildCache {
 }
 ```
 
-`delegateTo` accepts **only** Develocity's `develocity.buildCache`. Anything else is rejected
-while the settings script is still evaluating, naming the offending type. The plugin never talks to
-a cache backend itself; it only decides whether to call the Develocity connector you already have.
+`delegateTo` accepts only Develocity's `develocity.buildCache`; anything else is rejected during
+settings evaluation, naming the type it got. The plugin never talks to a cache backend itself. It
+only decides whether to call the Develocity connector you already have.
 
 ## How it works
 
@@ -147,12 +147,11 @@ to test. Now:
 | `DevelocityDelegationFunctionalTest` | 8 | end to end | decorating the Develocity connector, and rejecting any other cache type |
 | `ScanAnnotationFunctionalTest` | 6 | end to end | the reflective hop to a Develocity-shaped extension |
 
-The functional tests spawn real Gradle builds via TestKit and run **fully offline** — no
-Develocity server required. They decorate a directory-backed test double that deliberately carries
-Develocity's own fully-qualified type name, `com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache`,
-with its own factory and an injected build-scoped service. Using the real name means the tests
-exercise the same Develocity-only validation path as production, with no test-only branch in the
-plugin.
+The functional tests spawn real Gradle builds via TestKit and need no Develocity server. They
+decorate a directory-backed test double carrying Develocity's own fully-qualified type name,
+`com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache`, with its own factory and an
+injected build-scoped service. Same name, so the tests take the same validation path as
+production.
 
 Debug aid: `-DselectiveCache.dumpScripts=<dir>` writes the generated functional-test scripts
 somewhere inspectable, since TestKit project directories are temporary.
@@ -174,13 +173,12 @@ object instead. Hence `delegateTo`.
 
 ## Behavioural demo
 
-The test suite above is the authority and runs offline on every push. CI additionally proves the
-behaviour end to end against a **real Develocity instance**, because this plugin filters the
-Develocity cache and nothing else — see the `android` job in
+The tests above run offline on every push. CI also exercises the plugin end to end against a
+real Develocity instance: the `android` job in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml), which needs the `DEVELOCITY_URL` and
 `DEVELOCITY_ACCESS_KEY` repository secrets.
 
-To drive the same thing by hand:
+To run the same thing by hand:
 
 ```
 cd sample
@@ -189,12 +187,12 @@ export DEVELOCITY_SERVER=https://develocity.example.com
 ../gradlew runAll --build-cache
 ```
 
-`sample/` is a real Android build — AGP 9.4.0, three application modules — with
-`com.android.build.gradle.internal.tasks.DexMergingTask` on the deny-list. Dex merging is the
-canonical negative-savings candidate: the external-dependency merge alone produces a ~715 KiB
-entry that is usually faster to recompute than to pull over a WAN.
+`sample/` is an Android build (AGP 9.4.0, three application modules) with
+`com.android.build.gradle.internal.tasks.DexMergingTask` on the deny-list. Dex merging is a good
+candidate for exclusion: the external-dependency merge produces a ~715 KiB entry that is usually
+cheaper to recompute than to fetch over a WAN.
 
-The behaviours proved, and where each is covered:
+What it proves:
 
 | # | Behaviour | Result |
 |---|---|---|
@@ -210,11 +208,10 @@ which is exactly what `doNotCacheIf` cannot give you.
 
 ### Harness notes (both cost time to track down)
 
-- Knobs are Gradle properties — defaults in `sample/gradle.properties`, overridable with `-P`,
-  e.g. `-PselectiveCache.maxStoreSizeBytes=100000`. Read via `providers.gradleProperty`, they are
-  real configuration-cache inputs, so changing one invalidates the entry. Do **not** reach for `-D`
-  system properties here: those attach to the **daemon JVM for its whole lifetime**, so they leak
-  between runs and make configuration-cache inputs flap.
+- Knobs are Gradle properties: defaults in `sample/gradle.properties`, overridden with `-P`, e.g.
+  `-PselectiveCache.maxStoreSizeBytes=100000`. Read via `providers.gradleProperty`, so they are
+  configuration-cache inputs and changing one invalidates the entry. `-D` system properties are not
+  a substitute — those attach to the daemon JVM for its whole lifetime and leak between runs.
 - `sample/` needs an Android SDK. `ANDROID_HOME` is used if set, otherwise AGP falls back to the
   platform default location. `local.properties` is git-ignored, so pointing at a local SDK never
   ends up committed.
@@ -318,9 +315,9 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
   decorated extension objects carry Groovy `Closure` overloads that shadow the `Action` ones and
   produce "argument type mismatch".
 
-- **Exercised on a small build only.** `sample/` is a real Android build with real dex merging,
-  running against real Develocity with a real remote cache and real scans — but it is small.
-  Behaviour under load and with many excluded types is unmeasured.
+- **Exercised on a small build only.** `sample/` is an Android build with real dex merging,
+  running against Develocity with a real remote cache and real scans, but it is small. Behaviour
+  under load and with many excluded types is unmeasured.
 - **More internal API surface than the replacement approach.** Delegation needs
   `BuildCacheConfigurationInternal`, `InstantiatorFactory`, `ServiceRegistry` and
   `BuildOperationListenerManager`. All are long-standing, but re-verify on each Gradle major.

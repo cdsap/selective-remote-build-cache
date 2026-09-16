@@ -31,9 +31,8 @@ develocity {
     }
 }
 
-// Demo knobs come from Gradle properties - defaults in gradle.properties, overridable with -P.
-// They are real configuration-cache inputs, so changing one invalidates the entry rather than
-// silently reusing a stale configuration.
+// Defaults live in gradle.properties; override with -P. Gradle properties are
+// configuration-cache inputs, so changing one invalidates the entry.
 fun knob(name: String, default: String): String =
     providers.gradleProperty(name).getOrElse(default)
 

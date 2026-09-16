@@ -21,9 +21,8 @@ open class SelectiveRemoteBuildCache @Inject constructor(
     internal var delegateCache: BuildCache? = null
 
     /**
-     * The Develocity build cache to filter in front of, configured in place. This plugin filters
-     * the Develocity remote cache and nothing else: anything other than `develocity.buildCache`
-     * is rejected here, while the settings script is still evaluating.
+     * The Develocity build cache to filter in front of, configured in place. Anything other
+     * than `develocity.buildCache` is rejected here, during settings evaluation.
      *
      * ```
      * remote(SelectiveRemoteBuildCache::class.java) {
@@ -54,10 +53,7 @@ open class SelectiveRemoteBuildCache @Inject constructor(
         delegateCache = config
     }
 
-    /**
-     * Walks the supertypes rather than comparing the class directly, so a decorated or subclassed
-     * Develocity cache type is still recognised.
-     */
+    /** Walks supertypes, so a decorated or subclassed Develocity cache is still recognised. */
     private fun requireDevelocity(type: Class<*>) {
         val isDevelocity = generateSequence(type) { it.superclass }
             .any { it.name == DEVELOCITY_BUILD_CACHE_TYPE }
