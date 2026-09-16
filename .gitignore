@@ -1,7 +1,6 @@
 .gradle/
 build/
 .caches/
-filter.properties
 .idea/
 *.iml
 local.properties

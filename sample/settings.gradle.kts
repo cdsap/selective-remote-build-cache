@@ -1,5 +1,3 @@
-import java.util.Properties
-
 pluginManagement {
     includeBuild("../plugin")
     repositories {
@@ -56,17 +54,16 @@ develocity {
     }
 }
 
-// Scenario knobs live in a file rather than -D system properties: values passed with -D stick to
-// the daemon JVM for its whole lifetime, which makes configuration-cache inputs flap between runs.
-val filters = Properties().apply {
-    val f = File(rootDir, "filter.properties")
-    if (f.isFile) f.inputStream().use { load(it) }
-}
+// Demo knobs come from Gradle properties - defaults in gradle.properties, overridable with -P.
+// They are real configuration-cache inputs, so changing one invalidates the entry rather than
+// silently reusing a stale configuration.
+fun knob(name: String, default: String): String =
+    providers.gradleProperty(name).getOrElse(default)
 
 buildCache {
     local {
         directory = File(rootDir, ".caches/local")
-        isEnabled = filters.getProperty("localEnabled", "true").toBoolean()
+        isEnabled = knob("selectiveCache.localEnabled", "true").toBoolean()
         isPush = true
     }
 
@@ -76,9 +73,9 @@ buildCache {
         delegateTo(develocity.buildCache) {
             isPush = true
         }
-        excludedTypes = filters.getProperty("excludedTypes", "")
+        excludedTypes = knob("selectiveCache.excludedTypes", "")
             .split(",").filter { it.isNotBlank() }.toSet()
-        maxStoreSizeBytes = filters.getProperty("maxStoreSizeBytes", "0").toLong()
+        maxStoreSizeBytes = knob("selectiveCache.maxStoreSizeBytes", "0").toLong()
         debug = true
     }
 }

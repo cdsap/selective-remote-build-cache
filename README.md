@@ -186,7 +186,6 @@ To drive the same thing by hand:
 cd sample
 export DEVELOCITY_SERVER=https://develocity.example.com
 ../gradlew provisionDevelocityAccessKey    # once, or set DEVELOCITY_ACCESS_KEY
-printf 'excludedTypes=com.android.build.gradle.internal.tasks.DexMergingTask\n' > filter.properties
 ../gradlew runAll --build-cache
 ```
 
@@ -211,9 +210,11 @@ which is exactly what `doNotCacheIf` cannot give you.
 
 ### Harness notes (both cost time to track down)
 
-- Knobs live in `sample/filter.properties`, not `-D` system properties. Values passed with `-D`
-  attach to the **daemon JVM for its whole lifetime**, so they leak between runs and make
-  configuration-cache inputs flap.
+- Knobs are Gradle properties — defaults in `sample/gradle.properties`, overridable with `-P`,
+  e.g. `-PselectiveCache.maxStoreSizeBytes=100000`. Read via `providers.gradleProperty`, they are
+  real configuration-cache inputs, so changing one invalidates the entry. Do **not** reach for `-D`
+  system properties here: those attach to the **daemon JVM for its whole lifetime**, so they leak
+  between runs and make configuration-cache inputs flap.
 - `sample/` needs an Android SDK. `ANDROID_HOME` is used if set, otherwise AGP falls back to the
   platform default location. `local.properties` is git-ignored, so pointing at a local SDK never
   ends up committed.

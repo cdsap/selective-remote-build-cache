@@ -110,10 +110,12 @@ jobs:
         run: |
           cd sample
           DEX=com.android.build.gradle.internal.tasks.DexMergingTask
-          printf 'excludedTypes=%s\n' "$DEX" > filter.properties
           rm -rf .caches build app/build core/build domain/build
 
-          ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/cold.log
+          # Passed explicitly rather than relying on sample/gradle.properties, so this step
+          # fails if the default there ever drifts away from what it claims to prove.
+          ../gradlew runAll --build-cache --console=plain \
+            -PselectiveCache.excludedTypes="$DEX" 2>&1 | tee /tmp/cold.log
 
           grep -q "declined remote store for $DEX" /tmp/cold.log \
             || { echo "::error::no DexMergingTask store was declined"; exit 1; }
@@ -132,7 +134,8 @@ jobs:
         run: |
           cd sample
           rm -rf build app/build core/build domain/build
-          ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/warm.log
+          ../gradlew runAll --build-cache --console=plain \
+            -PselectiveCache.excludedTypes=com.android.build.gradle.internal.tasks.DexMergingTask 2>&1 | tee /tmp/warm.log
 
           grep -qE '^> Task .*DexDebug FROM-CACHE' /tmp/warm.log \
             || { echo "::error::dex merging was not restored from the local cache"; exit 1; }
