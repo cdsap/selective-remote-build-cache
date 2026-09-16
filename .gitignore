@@ -4,3 +4,5 @@ build/
 filter.properties
 .idea/
 *.iml
+local.properties
+.cxx/

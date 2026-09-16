@@ -177,14 +177,19 @@ The test suite above is the authority; `./verify.sh` is a readable walkthrough a
 third-party connector: its own settings plugin, its own `BuildCache` type, its own factory with an
 injected build-scoped service, and no knowledge whatsoever of this plugin. All five scenarios pass:
 
+`sample/` is a real Android build — AGP 9.4.0, three application modules — with
+`com.android.build.gradle.internal.tasks.DexMergingTask` on the deny-list. Dex merging is the
+canonical negative-savings candidate: the external-dependency merge alone produces a ~715 KiB
+entry that is usually faster to recompute than to pull over a WAN.
+
 | # | Scenario | Result |
 |---|---|---|
 | 0 | Vendor connector delegation | vendor factory runs, injected `BuildOperationRunner` resolves, vendor service does the caching |
-| 1 | Cold parallel build, 3 projects x 2 tasks, `BigOutputTask` excluded | exactly 3 remote loads + 3 remote stores skipped, 3 distinct keys, `SmallOutputTask` unaffected |
-| 2 | Local cache emptied, remote kept | all `small` -> `FROM-CACHE`; all `big` re-execute (remote load refused) |
-| 3 | Remote cache emptied, local kept | all `big` -> **`FROM-CACHE`** — the local tier is genuinely unaffected |
+| 1 | Cold parallel build, 3 Android modules, `DexMergingTask` excluded | 9 remote loads + 9 remote stores skipped, ~2 MB not uploaded; every other cacheable task unaffected |
+| 2 | Local cache emptied, remote kept | all `compileDebugJavaWithJavac` -> `FROM-CACHE`; all dex merge tasks re-execute (remote load refused) |
+| 3 | Remote cache emptied, local kept | all dex merge tasks -> **`FROM-CACHE`** — the local tier is genuinely unaffected |
 | 4 | `--configuration-cache` on a **reused** entry, local cache off | `Configuration cache entry reused` *and* filtering still applies |
-| 5 | Size filter alone (`maxStoreSizeBytes=500`) | the 3 over-limit entries held back; vendor directory keeps only the 3 small ones |
+| 5 | Size filter alone (`maxStoreSizeBytes=100000`) | only the three ~715 KiB external-dex entries held back; the small per-module dex entries still go to the remote |
 
 Scenario 3 is the one that matters: it is the proof that disabling remote does not disable local,
 which is exactly what `doNotCacheIf` cannot give you.
@@ -194,9 +199,9 @@ which is exactly what `doNotCacheIf` cannot give you.
 - Scenario knobs live in `sample/filter.properties`, not `-D` system properties. Values passed with
   `-D` attach to the **daemon JVM for its whole lifetime**, so they leak across scenarios and make
   configuration-cache inputs flap.
-- Deleting `buildSrc/build` invalidates the configuration cache entry (`an input to task
-  ':buildSrc:processResources' has changed`). The cleanup helpers delete only the sample
-  subprojects' output directories.
+- `sample/` needs an Android SDK. `ANDROID_HOME` is used if set, otherwise AGP falls back to the
+  platform default location. `local.properties` is git-ignored, so pointing at a local SDK never
+  ends up committed.
 
 ## Verified against real Develocity
 
@@ -297,9 +302,9 @@ the round-trip dominates the work — reproduced end to end on a Develocity inst
   decorated extension objects carry Groovy `Closure` overloads that shadow the `Action` ones and
   produce "argument type mismatch".
 
-- **Only exercised on a small synthetic build.** Real Develocity, real remote cache, real scans, but
-  6 trivial tasks. Behaviour under load, on large artifacts, and with many excluded types is
-  unmeasured.
+- **Exercised on small builds only.** `sample/` is a real Android build with real dex merging, and
+  `sample-develocity/` runs against real Develocity with a real remote cache and real scans — but
+  both are small. Behaviour under load and with many excluded types is unmeasured.
 - **More internal API surface than the replacement approach.** Delegation needs
   `BuildCacheConfigurationInternal`, `InstantiatorFactory`, `ServiceRegistry` and
   `BuildOperationListenerManager`. All are long-standing, but re-verify on each Gradle major.

@@ -1,39 +1,45 @@
 #!/usr/bin/env bash
 # Behavioural proof for selective-remote-build-cache. Uses the repo wrapper (Gradle 9.7.1).
 # Override with GRADLE=/path/to/gradle to run against a different distribution.
+#
+# Drives sample/, an Android build (AGP 9.4.0) whose dex merging is held back from the remote
+# cache. Requires an Android SDK: set ANDROID_HOME, or have one at the platform default.
 set -euo pipefail
 cd "$(dirname "$0")/sample"
 G="${GRADLE:-../gradlew}"
 FLAGS=(runAll --build-cache --console=plain)
 
+DEX_TYPE=com.android.build.gradle.internal.tasks.DexMergingTask
+
 reset()   { rm -rf .caches build a/build b/build c/build; }
 outputs() { rm -rf build a/build b/build c/build; }
 filters() { printf '%s\n' "$@" > filter.properties; }
 
-echo "===== 1. cold build: BigOutputTask skips remote load AND store ====="
-filters "excludedTypes=com.example.BigOutputTask"
+echo "===== 1. cold build: dex merging skips remote load AND store ====="
+filters "excludedTypes=$DEX_TYPE"
 reset
 $G "${FLAGS[@]}" --parallel 2>&1 | grep -E "Selective|actionable"
 
-echo; echo "===== 2. local cache emptied, remote kept: small FROM-CACHE, big re-executes ====="
+echo; echo "===== 2. local cache emptied, remote kept: javac FROM-CACHE, dex merging re-executes ====="
 outputs; find .caches/local -type f ! -name 'gc.properties' ! -name '*.lock' -delete
-$G "${FLAGS[@]}" 2>&1 | grep -E "^> Task .*(small|big)"
+$G "${FLAGS[@]}" 2>&1 | grep -E "^> Task .*(DexDebug|JavaWithJavac)"
 
-echo; echo "===== 3. remote emptied, local kept: big still FROM-CACHE (local tier unaffected) ====="
+echo; echo "===== 3. remote emptied, local kept: dex merging still FROM-CACHE (local tier unaffected) ====="
 outputs; find .caches/remote -type f ! -name "gc.properties" ! -name "*.lock" -delete
-$G "${FLAGS[@]}" 2>&1 | grep -E "^> Task .*(small|big)"
+$G "${FLAGS[@]}" 2>&1 | grep -E "^> Task .*(DexDebug|JavaWithJavac)"
 
 echo; echo "===== 4. configuration-cache HIT still filters (local cache off, so remote is consulted) ====="
-filters "excludedTypes=com.example.BigOutputTask" "localEnabled=false"
+filters "excludedTypes=$DEX_TYPE" "localEnabled=false"
 reset
 $G "${FLAGS[@]}" --configuration-cache 2>&1 | grep -E "Configuration cache entry"
 outputs
-$G "${FLAGS[@]}" --configuration-cache 2>&1 | grep -E "Configuration cache entry|Selective|^> Task .*(small|big)"
+$G "${FLAGS[@]}" --configuration-cache 2>&1 | grep -E "Configuration cache entry|Selective remote cache: declined [0-9]"
 
 echo; echo "===== 5. size filter alone, no type deny-list, zero internal APIs ====="
-# 500 bytes sits between the small and big task entries, so only the big ones are held back.
-filters "maxStoreSizeBytes=500"
+# 100 kB sits between the small per-project dex entries and the ~700 kB external-dependency
+# dex merge, so only the genuinely large entries are held back.
+filters "maxStoreSizeBytes=100000"
 reset
 $G "${FLAGS[@]}" 2>&1 | grep -E "Selective" || echo "(no size-filtered entries)"
 
-filters "excludedTypes=com.example.BigOutputTask"
+filters "excludedTypes=$DEX_TYPE"

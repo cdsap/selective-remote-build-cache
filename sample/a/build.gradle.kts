@@ -1,12 +1,13 @@
-import com.example.BigOutputTask
-import com.example.SmallOutputTask
-
-tasks.register<SmallOutputTask>("small") {
-    content.set("small output for a")
-    outputFile.set(layout.buildDirectory.file("small.txt"))
+plugins {
+    id("com.android.application")
 }
 
-tasks.register<BigOutputTask>("big") {
-    content.set("big output for a ".repeat(5000))
-    outputFile.set(layout.buildDirectory.file("big.txt"))
+android {
+    namespace = "com.example.a"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 24
+        targetSdk = 36
+    }
 }

@@ -2,10 +2,22 @@ import java.util.Properties
 
 pluginManagement {
     includeBuild("../plugin")
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
 
 plugins {
     id("io.github.cdsap.selective-remote-cache")
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 
 rootProject.name = "sample"
