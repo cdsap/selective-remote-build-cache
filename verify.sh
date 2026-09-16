@@ -11,8 +11,8 @@ FLAGS=(runAll --build-cache --console=plain)
 
 DEX_TYPE=com.android.build.gradle.internal.tasks.DexMergingTask
 
-reset()   { rm -rf .caches build a/build b/build c/build; }
-outputs() { rm -rf build a/build b/build c/build; }
+reset()   { rm -rf .caches build app/build core/build domain/build; }
+outputs() { rm -rf build app/build core/build domain/build; }
 filters() { printf '%s\n' "$@" > filter.properties; }
 
 echo "===== 1. cold build: dex merging skips remote load AND store ====="

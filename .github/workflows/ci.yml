@@ -96,7 +96,7 @@ jobs:
         run: |
           cd sample
           printf 'excludedTypes=com.android.build.gradle.internal.tasks.DexMergingTask\n' > filter.properties
-          rm -rf .caches build a/build b/build c/build
+          rm -rf .caches build app/build core/build domain/build
           ../gradlew runAll --build-cache --console=plain 2>&1 | tee /tmp/build.log
 
           grep -q 'declined remote store for com.android.build.gradle.internal.tasks.DexMergingTask' /tmp/build.log \

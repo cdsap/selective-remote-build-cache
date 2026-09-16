@@ -21,7 +21,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "sample"
-include("a", "b", "c")
+include("app", "core", "domain")
 
 // Scenario knobs live in a file rather than -D system properties: values passed with -D stick to
 // the daemon JVM for its whole lifetime, which makes configuration-cache inputs flap between runs.
