@@ -22,32 +22,9 @@ dependencyResolutionManagement {
 rootProject.name = "sample"
 include("app", "core", "domain")
 
-// Point this sample at your own Develocity instance:
-//
-//   ../gradlew -Pdevelocity.server=https://develocity.example.com runAll --build-cache
-//   DEVELOCITY_SERVER=https://develocity.example.com ../gradlew runAll --build-cache
-//
-// Deliberately has no default. A hardcoded host would make every clone of this repo publish
-// Build Scans and cache entries to someone else's server. Authenticate once with
-// `../gradlew provisionDevelocityAccessKey`, or set DEVELOCITY_ACCESS_KEY.
-val develocityServer: String =
-    (providers.gradleProperty("develocity.server")
-        .orElse(providers.environmentVariable("DEVELOCITY_SERVER"))
-        .orNull
-        ?: error(
-            """
-            sample needs a Develocity instance to talk to.
-
-              Pass -Pdevelocity.server=https://develocity.example.com, or set DEVELOCITY_SERVER.
-              Authenticate first with: ../gradlew provisionDevelocityAccessKey
-
-            This plugin filters the Develocity build cache and nothing else, so there is no
-            offline mode for the sample. The plugin's own test suite runs offline.
-            """.trimIndent()
-        )).removeSuffix("/")
 
 develocity {
-    server = develocityServer
+    server = "https://ge.solutions-team.gradle.com/"
     buildScan {
         uploadInBackground = false
         tag("selective-remote-cache-test")
@@ -63,7 +40,7 @@ fun knob(name: String, default: String): String =
 buildCache {
     local {
         directory = File(rootDir, ".caches/local")
-        isEnabled = knob("selectiveCache.localEnabled", "true").toBoolean()
+        isEnabled = false
         isPush = true
     }
 
