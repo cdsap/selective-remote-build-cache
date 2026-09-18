@@ -16,9 +16,18 @@ concurrency:
 
 jobs:
   validate:
-    name: Build and test the plugin
+    name: Build and test on JDK ${{ matrix.java }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    strategy:
+      # One JDK failing says something specific about that JDK; the others should still report.
+      fail-fast: false
+      matrix:
+        # 17 is the floor — the oldest JDK a Gradle 9 daemon runs on, and what the plugin's
+        # bytecode targets. The functional tests spawn their TestKit builds on this same JDK, so
+        # each leg proves the plugin is usable there rather than merely that it compiles.
+        java: ['17', '21', '25']
 
     steps:
       - uses: actions/checkout@v7
@@ -28,11 +37,11 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
 
-      - name: Set up JDK 21
+      - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ matrix.java }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -49,11 +58,32 @@ jobs:
       - name: Build and test the plugin
         run: ./gradlew -p plugin build --stacktrace
 
+      # The point of pinning the target in plugin/build.gradle.kts: the artifact must resolve for
+      # a consumer on Java 17 no matter which JDK cut the release. Both facts are checked, because
+      # the metadata attribute is what fails resolution and the bytecode is what fails at class
+      # load. Without this, building on a newer JDK silently raises the floor for everyone.
+      - name: Confirm the artifact still targets Java 17
+        run: |
+          ./gradlew -p plugin generateMetadataFileForPluginMavenPublication -q
+
+          JAR="$(find plugin/build/libs -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)"
+          PROBE="${RUNNER_TEMP:-/tmp}/probe.class"
+          unzip -p "$JAR" io/github/cdsap/selectivecache/SelectiveRemoteBuildCache.class > "$PROBE"
+          MAJOR="$(javap -v "$PROBE" | awk '/major version/ {print $3}')"
+          echo "bytecode major version: $MAJOR"
+          [ "$MAJOR" = "61" ] || { echo "::error::expected Java 17 bytecode (major 61), got $MAJOR"; exit 1; }
+
+          META=plugin/build/publications/pluginMaven/module.json
+          JVM="$(grep -o '\"org.gradle.jvm.version\": *[0-9]*' "$META" | head -1 | grep -o '[0-9]*$')"
+          echo "org.gradle.jvm.version: $JVM"
+          [ "$JVM" = "17" ] || { echo "::error::module metadata declares Java $JVM, expected 17"; exit 1; }
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports
+          # Artifact names have to be unique across the matrix.
+          name: test-reports-jdk${{ matrix.java }}
           path: |
             plugin/build/reports/tests/
             plugin/build/test-results/

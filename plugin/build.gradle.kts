@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     // Uses Gradle's embedded Kotlin, so the compiler always matches the kotlin-stdlib that
     // gradleApi() drags in. Also applies java-gradle-plugin and adds gradleApi() implicitly.
@@ -11,6 +13,20 @@ group = "io.github.cdsap"
 version = "0.1.0"
 
 repositories { mavenCentral() }
+
+// Without this the artifact inherits whatever JDK built it: java-gradle-plugin records
+// org.gradle.jvm.version in the module metadata, so a jar compiled on JDK 21 refuses to resolve
+// for anyone on Java 17 — and Java 17 is the minimum a Gradle 9 daemon runs on. Deliberately a
+// target, not a toolchain: a toolchain would also move the test JVM, and CI runs the suite on
+// each supported JDK to prove the plugin works there.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlin {
+    compilerOptions { jvmTarget = JvmTarget.JVM_17 }
+}
 
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
