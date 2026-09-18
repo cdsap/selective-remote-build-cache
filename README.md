@@ -19,7 +19,8 @@ the protocol, the retries and the Build Scan reporting.
 
 ## Usage
 
-Not published to the Gradle Plugin Portal yet, so include the build:
+Not released to the Gradle Plugin Portal yet — the build is wired to publish there
+(see [Publishing](#publishing)), but until the first release lands, include the build:
 
 ```kotlin
 // settings.gradle.kts
@@ -144,6 +145,34 @@ Knobs are Gradle properties, defaults in `sample/gradle.properties`:
 
 85 tests, ~25s, no Develocity server needed.
 
+## Publishing
+
+The plugin build applies `com.gradle.plugin-publish`, which brings `maven-publish`, `signing`, and
+the sources and javadoc jars the Gradle Plugin Portal requires.
+
+To try a consumer against a real artifact before releasing anything:
+
+```
+./gradlew -p plugin publishToMavenLocal
+```
+
+To release to the Portal, put the API keys from your Portal profile in `~/.gradle/gradle.properties`
+(or pass them as `-P` flags):
+
+```
+gradle.publish.key=<key>
+gradle.publish.secret=<secret>
+```
+
+then:
+
+```
+./gradlew -p plugin publishPlugins
+```
+
+The first publication under the `io.github.cdsap` namespace goes through manual approval by the
+Portal maintainers, so it is not same-day.
+
 ## More
 
 [DESIGN.md](DESIGN.md) — how the delegation works, how the task type is recovered from build
@@ -152,3 +181,7 @@ operations, what the tests pin down, measured results, and the known limitations
 This is the capability asked for in
 [gradle/gradle#27710](https://github.com/gradle/gradle/issues/27710), which Gradle closed as
 `not planned` in April 2024.
+
+## License
+
+[Apache License 2.0](LICENSE).
