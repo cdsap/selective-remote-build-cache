@@ -10,6 +10,14 @@ to pull over a WAN.
 It wraps the Develocity build cache rather than replacing it, so Develocity still does the auth,
 the protocol, the retries and the Build Scan reporting.
 
+> [!WARNING]
+> **Experimental.** This plugin is not supported by Gradle or by Develocity, and it is not
+> covered by any Develocity support agreement. It reaches into Gradle internals — the build
+> cache service factory, the instantiator, and build operations — to recover which task owns a
+> cache entry, so a Gradle upgrade can break it without warning. The configuration surface may
+> change between releases. Measure the effect on your own build before relying on it, and treat
+> a broken build after an upgrade as the expected failure mode.
+
 ## Requirements
 
 - Gradle 9 or newer, on any JDK Gradle 9 itself runs on — **Java 17 and up**. The published

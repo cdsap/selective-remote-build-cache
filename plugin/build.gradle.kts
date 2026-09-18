@@ -44,8 +44,12 @@ gradlePlugin {
             id = "io.github.cdsap.selective-remote-cache"
             implementationClass = "io.github.cdsap.selectivecache.SelectiveRemoteCacheSettingsPlugin"
             displayName = "Selective Remote Build Cache"
-            description = "Keeps chosen task types out of the remote build cache while leaving the " +
-                "local cache untouched, for tasks that are cheaper to re-run than to fetch over a WAN."
+            // The Portal listing is the first thing a stranger reads, so the warning goes here
+            // too, not only in the README.
+            description = "EXPERIMENTAL. Keeps chosen task types out of the remote build cache " +
+                "while leaving the local cache untouched, for tasks that are cheaper to re-run " +
+                "than to fetch over a WAN. Uses Gradle internals; not supported by Gradle or " +
+                "Develocity, and a Gradle upgrade can break it."
             tags = listOf("build-cache", "develocity", "performance", "android")
         }
     }
