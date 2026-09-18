@@ -3,10 +3,17 @@
 A Gradle settings plugin that keeps chosen task types out of the **remote** build cache, while
 leaving the **local** cache untouched.
 
-Use it when fetching a task's output from the remote cache costs more than just running the task.
-Android dex merging is the usual example: a ~700 KiB entry that is often cheaper to recompute than
-to pull over a WAN.
+```
+buildCache {
+    remote(io.github.cdsap.selectivecache.SelectiveRemoteBuildCache::class.java) {
+        isPush = isCi
+        excludedTypes = setOf("com.android.build.gradle.internal.tasks.DexMergingTask")
+    }
+}
 
+```
+
+Use it when fetching a task's output from the remote cache costs more than just running the task.
 It wraps the Develocity build cache rather than replacing it, so Develocity still does the auth,
 the protocol, the retries and the Build Scan reporting.
 
@@ -22,18 +29,12 @@ the protocol, the retries and the Build Scan reporting.
 
 ## Usage
 
-Not released to the Gradle Plugin Portal yet — the build is wired to publish there
-(see [Publishing](#publishing)), but until the first release lands, include the build:
-
 ```kotlin
 // settings.gradle.kts
-pluginManagement {
-    includeBuild("../selective-remote-build-cache/plugin")
-}
 
 plugins {
     id("com.gradle.develocity") version "4.5.1"
-    id("io.github.cdsap.selective-remote-cache")
+    id("io.github.cdsap.selective-remote-cache") version "0.0.1"
 }
 
 develocity {
@@ -122,59 +123,6 @@ On a Build Scan, the same counts appear as custom values under `selective-remote
 
 Gradle still records these as cache misses in its own reporting: the plugin declines the call, and
 Gradle has no concept of "deliberately skipped for the remote tier only".
-
-## Sample
-
-`sample/` is an Android build (AGP 9.4.0, three modules) with dex merging excluded. It needs an
-Android SDK and a Develocity instance — set the server in `sample/settings.gradle.kts` first.
-
-```
-cd sample
-../gradlew provisionDevelocityAccessKey    # once, to authenticate
-../gradlew runAll --build-cache
-```
-
-Knobs are Gradle properties, defaults in `sample/gradle.properties`:
-
-```
-../gradlew runAll --build-cache -PselectiveCache.maxStoreSizeBytes=100000
-```
-
-## Tests
-
-```
-./gradlew -p plugin test
-```
-
-73 tests, ~20s, no Develocity server needed.
-
-## Publishing
-
-The plugin build applies `com.gradle.plugin-publish`, which brings `maven-publish`, `signing`, and
-the sources and javadoc jars the Gradle Plugin Portal requires.
-
-To try a consumer against a real artifact before releasing anything:
-
-```
-./gradlew -p plugin publishToMavenLocal
-```
-
-To release to the Portal, put the API keys from your Portal profile in `~/.gradle/gradle.properties`
-(or pass them as `-P` flags):
-
-```
-gradle.publish.key=<key>
-gradle.publish.secret=<secret>
-```
-
-then:
-
-```
-./gradlew -p plugin publishPlugins
-```
-
-The first publication under the `io.github.cdsap` namespace goes through manual approval by the
-Portal maintainers, so it is not same-day.
 
 ## More
 
