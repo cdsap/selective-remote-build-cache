@@ -34,7 +34,7 @@ the protocol, the retries and the Build Scan reporting.
 
 plugins {
     id("com.gradle.develocity") version "4.5.1"
-    id("io.github.cdsap.selective-remote-cache") version "0.0.1"
+    id("io.github.cdsap.selective-remote-cache") version "0.1.1"
 }
 
 develocity {
@@ -50,6 +50,11 @@ buildCache {
     }
 }
 ```
+
+Use 0.1.1 or newer. In 0.1.0 an excluded task also took its artifact transforms down with it:
+on Now in Android, excluding `DexMergingTask` declined 345 remote cache calls where 3 were meant,
+the rest being every dependency's dexing transform — so those entries were kept out of the remote
+cache instead of the one they were aimed at.
 
 There is no `delegateTo` line: the cache being filtered defaults to `develocity.buildCache`. Write
 one only to configure the Develocity cache at the same time:
