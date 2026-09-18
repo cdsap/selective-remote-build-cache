@@ -35,10 +35,27 @@ class BuildOperationWorkOwnerSource : BuildOperationListener, WorkOwnerSource {
             is ExecutePlannedTransformStepBuildOperationType.Details ->
                 owners[id] = details.transformActionClass.name
             else -> {
+                // An artifact transform runs inside whatever work needed the artifact. For AGP's
+                // dexing transforms that is the *input snapshotting* of the task consuming them,
+                // so the transform's own cache entries sit under a task operation. Inheriting
+                // there would label every dependency's dex with DexMergingTask: excluding that
+                // one task type declined ~600 unrelated entries on Now in Android. Stop at the
+                // boundary instead — an entry nobody can identify is left alone, not declined.
+                if (isTransformWork(descriptor)) return
                 val parent = descriptor.parentId?.id ?: return
                 owners[parent]?.let { owners[id] = it }
             }
         }
+    }
+
+    /**
+     * Neither spelling is public API — Gradle emits the chain wrapper around a whole transform
+     * chain and the unit-of-work operation around each step — so both are matched, and the
+     * functional tests run a real build to catch it if the wording ever moves.
+     */
+    private fun isTransformWork(descriptor: BuildOperationDescriptor): Boolean {
+        val displayName = descriptor.displayName ?: return false
+        return displayName.startsWith(TRANSFORM_CHAIN) || displayName.startsWith(TRANSFORM_STEP)
     }
 
     override fun progress(operationIdentifier: OperationIdentifier, progressEvent: OperationProgressEvent) = Unit
@@ -50,4 +67,9 @@ class BuildOperationWorkOwnerSource : BuildOperationListener, WorkOwnerSource {
     /** Fully-qualified name of the task class / TransformAction the current thread serves. */
     override fun currentOwner(): String? =
         CurrentBuildOperationRef.instance().get()?.id?.id?.let(owners::get)
+
+    private companion object {
+        const val TRANSFORM_CHAIN = "Execute transform chain:"
+        const val TRANSFORM_STEP = "Execute unit of work: TRANSFORM"
+    }
 }
