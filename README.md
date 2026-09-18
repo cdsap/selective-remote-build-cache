@@ -12,10 +12,13 @@ the protocol, the retries and the Build Scan reporting.
 
 ## Requirements
 
-- Gradle 9.7+ (tested on 9.7.1)
-- The `com.gradle.develocity` plugin. This plugin filters the Develocity cache and nothing else;
-  it defaults to `develocity.buildCache`, and passing any other cache type to `delegateTo` fails
-  during settings evaluation.
+- Gradle 9 or newer, on any JDK Gradle 9 itself runs on — **Java 17 and up**. The published
+  artifact targets Java 17 bytecode regardless of the JDK that builds it, and CI builds and tests
+  the plugin on 17, 21 and 25.
+- The `com.gradle.develocity` plugin, **3.17 or newer** — the release that introduced the
+  `com.gradle.develocity` id and `develocity.buildCache`. This plugin filters the Develocity cache
+  and nothing else; it defaults to `develocity.buildCache`, and passing any other cache type to
+  `delegateTo` fails during settings evaluation.
 
 ## Usage
 
@@ -143,7 +146,7 @@ Knobs are Gradle properties, defaults in `sample/gradle.properties`:
 ./gradlew -p plugin test
 ```
 
-85 tests, ~25s, no Develocity server needed.
+73 tests, ~20s, no Develocity server needed.
 
 ## Publishing
 
