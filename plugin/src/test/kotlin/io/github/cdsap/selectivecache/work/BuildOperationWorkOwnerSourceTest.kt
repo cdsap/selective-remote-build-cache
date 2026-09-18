@@ -45,8 +45,8 @@ class BuildOperationWorkOwnerSourceTest {
             override fun getSubjectName() = "subject"
         }
 
-    private fun start(id: Long, parentId: Long?, details: Any? = null) {
-        val descriptor = BuildOperationDescriptor.displayName("op-$id")
+    private fun start(id: Long, parentId: Long?, details: Any? = null, displayName: String = "op-$id") {
+        val descriptor = BuildOperationDescriptor.displayName(displayName)
             .apply { if (details != null) details(details) }
             .build(OperationIdentifier(id), parentId?.let(::OperationIdentifier))
         tracker.started(descriptor, OperationStartEvent(0))
@@ -187,5 +187,67 @@ class BuildOperationWorkOwnerSourceTest {
         (0 until taskCount).forEach { i ->
             assertEquals(classes[i % classes.size].name, results[i], "thread $i was mis-attributed")
         }
+    }
+
+    // ---------- artifact transforms running inside a task ----------
+    //
+    // Gradle runs an unplanned transform inside whatever work needed the artifact. The operation
+    // tree below is the one AGP produces on Now in Android: the dexing transform for every
+    // dependency runs while the dex-merging task snapshots its inputs, so the transform's cache
+    // entries hang under that task's operation. Before this was handled, excluding
+    // DexMergingTask declined ~600 dependency entries that had nothing to do with it.
+
+    @Test
+    fun `a transform running inside a task does not inherit the task type`() {
+        start(id = 1, parentId = null, details = taskDetails(TaskA::class.java))
+        start(id = 2, parentId = 1, displayName = "Snapshot task inputs for :app:mergeExtDexDemoDebug")
+        start(id = 3, parentId = 2, displayName = "Execute transform chain: guava-33.0.jar (com.google.guava:guava:33.0)")
+        start(id = 4, parentId = 3, displayName = "Execute unit of work: TRANSFORM")
+        start(id = 5, parentId = 4, displayName = "Load entry abc123 from remote build cache")
+
+        assertNull(asCurrentOperation(5, 4), "a dependency's transform entry must not be attributed to the task")
+    }
+
+    @Test
+    fun `the unit-of-work operation alone is enough to stop inheritance`() {
+        // Defensive: the chain wrapper is not always present.
+        start(id = 1, parentId = null, details = taskDetails(TaskA::class.java))
+        start(id = 2, parentId = 1, displayName = "Execute unit of work: TRANSFORM")
+        start(id = 3, parentId = 2)
+
+        assertNull(asCurrentOperation(3, 2))
+    }
+
+    @Test
+    fun `the task's own cache entry is still attributed to the task`() {
+        // The load that belongs to the task itself sits outside any transform subtree, and is
+        // exactly the one an exclusion is meant to catch.
+        start(id = 1, parentId = null, details = taskDetails(TaskA::class.java))
+        start(id = 2, parentId = 1, displayName = "Load entry abc123 from remote build cache")
+
+        assertEquals(TaskA::class.java.name, asCurrentOperation(2, 1))
+    }
+
+    @Test
+    fun `a planned transform step under a task still reports its own action class`() {
+        // Planned steps carry their own details, so they name the transform rather than stopping
+        // at unknown. Excluding a TransformAction type keeps working.
+        start(id = 1, parentId = null, details = taskDetails(TaskA::class.java))
+        start(id = 2, parentId = 1, details = transformDetails(TransformA::class.java))
+        start(id = 3, parentId = 2, displayName = "Load entry abc123 from remote build cache")
+
+        assertEquals(TransformA::class.java.name, asCurrentOperation(3, 2))
+    }
+
+    @Test
+    fun `work below a transform in a task is not attributed to the task either`() {
+        // Whatever the transform spawns is the transform's business, not the task's.
+        start(id = 1, parentId = null, details = taskDetails(TaskA::class.java))
+        start(id = 2, parentId = 1, displayName = "Execute transform chain: dep.jar (g:dep:1)")
+        start(id = 3, parentId = 2, displayName = "Execute unit of work: TRANSFORM")
+        start(id = 4, parentId = 3)
+        start(id = 5, parentId = 4)
+
+        assertNull(asCurrentOperation(5, 4))
     }
 }
